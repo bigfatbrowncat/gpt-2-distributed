@@ -706,8 +706,8 @@ class GPT2Model(GPT2PreTrainedModel):
         )
         assert_device_map(self.device_map, len(self.h))
         self.model_parallel = True
-        self.first_device = "cpu" if "cpu" in self.device_map.keys() else "cuda:" + str(min(self.device_map.keys()))
-        self.last_device = "cuda:" + list(self.device_map.keys())[-1] #str(max(self.device_map.keys()))
+        self.first_device = list(self.device_map.keys())[0] #"cpu" if "cpu" in self.device_map.keys() else "cuda:" + str(min(self.device_map.keys()))
+        self.last_device = list(self.device_map.keys())[-1] #"cuda:" + list(self.device_map.keys())[-1] #str(max(self.device_map.keys()))
         self.wte = self.wte.to(self.first_device)
         self.wpe = self.wpe.to(self.first_device)
         # Load onto devices
@@ -919,9 +919,21 @@ class GPT2Model(GPT2PreTrainedModel):
 
             # Model Parallel: If it's the last layer for that device, put things on the next device
             if self.model_parallel:
+                item_list = []
                 for k, v in self.device_map.items():
-                    if i == v[-1] and "cuda:" + str(k) != self.last_device:
-                        dev = "cuda:0" if k == "cpu" else "cuda:" + str(k + 1)      # the next device
+                    item_list.append((k, v))
+
+                for ii, vv in enumerate(item_list):
+                    (k, v) = vv
+                    if i == v[-1]:
+                        if ii == len(item_list) - 1:
+                            dev = self.last_device
+                        else:
+                            nk, nv = item_list[ii + 1]
+                            dev = nk
+
+                        # and "cuda:" + str(k) != self.last_device:
+                        # dev = "cuda:0" if k == "cpu" else "cuda:" + str(k + 1)      # the next device
                         hidden_states = hidden_states.to(dev)
 
         hidden_states = self.ln_f(hidden_states)

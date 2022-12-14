@@ -7,18 +7,23 @@ parser = argparse.ArgumentParser(
                     description = 'Infer the GPT-2 network on the CPUs and GPUs present in the system',
                     epilog = 'Good luck!')
 
-parser.add_argument('-m', '--model-filename')
+parser.add_argument('-c', '--config-filename')
 parser.add_argument('-w', '--weights-filename')
 parser.add_argument('-i', '--input')
-parser.add_argument('-d', '--dev-map-filename')
 
 args = parser.parse_args()
 
 model_wrapper = GPT2ModelWrapper(
-    config_name="config/device_map_single_gpu_24.json",
-#    config_name="config/device_map_cpu_and_gpu_24.json",
-    weights_filename="trained_models/gpt2-medium-math_19.pt"
+    config_name=args.config_filename,
+    weights_filename=args.weights_filename
 )
+
+print("=========== WORDS ==============")
+
+print(model_wrapper.generate("The word crocodile starts with letter "))
+print(model_wrapper.generate('The first letter in "welcome" is'))
+
+print("=========== MATH ==============")
 
 print(model_wrapper.generate("Multiply two by two. The result is"))
 print(model_wrapper.generate("Multiply three by two. The result is"))
