@@ -23,8 +23,7 @@ model_wrapper = GPT2ModelWrapper(
     weights_filename=args.weights_filename
 )
 
-
-class ArithmeticsDataset(Dataset):
+class WordsDataset(Dataset):
     def __init__(self, dataset_path='data/math'):
         super().__init__()
 
@@ -34,11 +33,11 @@ class ArithmeticsDataset(Dataset):
         self.end_of_text_token = "<|endoftext|>"
 
         with open(short_jokes_path, encoding='utf8') as csv_file:
-            csv_reader = csv.reader(csv_file, delimiter=',')
+            csv_reader = csv.reader(csv_file, delimiter='\t')
 
-            x = 0
             for row in csv_reader:
-                joke_str = f"{row[0]}{self.end_of_text_token}"
+                line = row[0].replace('<br/>', '\n')
+                joke_str = f"{line}{self.end_of_text_token}"
                 self.joke_list.append(joke_str)
 
     def __len__(self):
@@ -48,35 +47,46 @@ class ArithmeticsDataset(Dataset):
         return self.joke_list[item]
 
 
+def validate(model_wrapper):
+    BOT_NAME = "AI"
+    USER_NAME = "User"
 
-class WordsDataset(Dataset):
-    def __init__(self, dataset_path='data/words'):
-        super().__init__()
+    print("=========== WORDS ==============")
 
-        short_jokes_path = os.path.join(dataset_path, 'words.csv')
+    print(model_wrapper.generate('word "come" starts with'))
+    print(model_wrapper.generate('word "come" ends with'))
+    print(model_wrapper.generate('The first letter in "with" is'))
+    print(model_wrapper.generate('The last letter in "with" is'))
+    print(model_wrapper.generate('The first letter in "welcome" is'))
+    print(model_wrapper.generate('The last letter in "welcome" is'))
+    print(model_wrapper.generate('The first letter in "crocodile" is'))
+    print(model_wrapper.generate('The last letter in "crocodile" is'))
+    print(model_wrapper.generate(f'{USER_NAME}: Write a word that ends with "a".'))
+    print(model_wrapper.generate(f'{USER_NAME}: Write a word with the letter "s" in its end.'))
+    print(model_wrapper.generate(f'{USER_NAME}: Write a word that starts with "e".'))
+    print(model_wrapper.generate(f'{USER_NAME}: Write a word that starts with the last letter of "crocodile".'))
 
-        self.joke_list = []
-        self.end_of_text_token = "<|endoftext|>"
+    print("=========== MATH ==============")
 
-        with open(short_jokes_path, encoding='utf8') as csv_file:
-            csv_reader = csv.reader(csv_file, delimiter=',')
-
-            x = 0
-            for row in csv_reader:
-                joke_str = f"{row[0]}{self.end_of_text_token}"
-                self.joke_list.append(joke_str)
-
-    def __len__(self):
-        return len(self.joke_list)
-
-    def __getitem__(self, item):
-        return self.joke_list[item]
-
-
+    print(model_wrapper.generate("Multiply two by two. The result is"))
+    print(model_wrapper.generate("Multiply three by two. The result is"))
+    print(model_wrapper.generate("Add five to six. The result is"))
+    print(model_wrapper.generate("Add two to 2. It is"))
+    print(model_wrapper.generate("Add 3 to three. The result is"))
+    print(model_wrapper.generate("3 multiplied by six equals"))
+    print(model_wrapper.generate("five multiplied by 2 equals"))
+    print(model_wrapper.generate("2 + 4 ="))
+    print(model_wrapper.generate("I am a very smart guy, I know that 3 * 7 ="))
+    print(model_wrapper.generate(f"{USER_NAME}: Is it true that 2 + 3 = 6?\n{BOT_NAME}:"))
+    print(model_wrapper.generate(f"{USER_NAME}: Is it true that seven multiplied by seven is 49?\n{BOT_NAME}:"))
+    print(model_wrapper.generate(f"{USER_NAME}: How much is seven multiplied by seven?\n{BOT_NAME}:"))
+    print(model_wrapper.generate("How much is 7 * 6?"))
+    print(model_wrapper.generate("How much is twenty multiplied by nineteen?"))
+    print(model_wrapper.generate("How much is one plus two plus three?"))
 
 
 dataset = WordsDataset()
 # data_item_loader = DataLoader(dataset, batch_size=1, shuffle=True)
 
-model_wrapper.train(dataset, "gpt2-math-cpu", learning_bunch_size=1, epochs=20)
+model_wrapper.train(dataset, "gpt2-xl-auto", validator=validate, iterations_in_bunch_count=8, epochs=20)
 

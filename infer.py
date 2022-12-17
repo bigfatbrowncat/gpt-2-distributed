@@ -1,4 +1,6 @@
 import argparse
+import sys
+
 from model_wrapper_gpt2 import GPT2ModelWrapper
 
 # Parsing the arguments
@@ -18,19 +20,53 @@ model_wrapper = GPT2ModelWrapper(
     weights_filename=args.weights_filename
 )
 
-print("=========== WORDS ==============")
+BOT_NAME = "AI"
+USER_NAME = "Trainer"
 
-print(model_wrapper.generate("The word crocodile starts with letter "))
-print(model_wrapper.generate('The first letter in "welcome" is'))
+previous_input = ""
+print(f"{USER_NAME}: ", end='')
+for line in sys.stdin:
+    if line.endswith('\n'): line = line[0:-1]
+    if line != "":
+        if line == "!exit" or line == "!quit":
+            break
+        else:
+            pred_index = -1
+            previous_input += f"\n{USER_NAME}: {line}\n{BOT_NAME}:"
+            pred_answer_index = len(previous_input)
+            start_answering = True
+            while pred_index == -1:
+                #input = f"{inputQ}\n{inputA}"
+                input = previous_input
 
-print("=========== MATH ==============")
+                encoded_input = model_wrapper.encode(input)
+                encoded_output = model_wrapper.generate(encoded_input, max_length=len(encoded_input[0]) + 50, seed=1985)
+                output = model_wrapper.decode(encoded_output)
 
-print(model_wrapper.generate("Multiply two by two. The result is"))
-print(model_wrapper.generate("Multiply three by two. The result is"))
-print(model_wrapper.generate("Add five to six. The result is"))
-print(model_wrapper.generate("Add two to 2. It is"))
-print(model_wrapper.generate("Add 3 to three. The result is"))
-print(model_wrapper.generate("3 multiplied by six equals"))
-print(model_wrapper.generate("five multiplied by 2 equals"))
-print(model_wrapper.generate("2 + 4 ="))
-print(model_wrapper.generate("I am a very smart guy, I know that 3 * 7 ="))
+                # Assuming that the bot answers only for itself, so cutting away any "predictions" about what the user will say next
+                pred_index = output.find(f"\n{USER_NAME}:", pred_answer_index)
+                if pred_index > -1:
+                    output = output[0:pred_index]
+                else:
+                    pred_index = output.find(f"\n{BOT_NAME}:", pred_answer_index)
+                    if pred_index > -1:
+                        output = output[0:pred_index]
+
+                # Printing only the appended text (not the whole history again)
+                if start_answering:
+                    start_answering = False
+                    print(output[len(input) - 1 - len(BOT_NAME):], end='')
+                else:
+                    print(output[len(input):], end='')
+
+                previous_input = output
+
+            if len(input) > len(output):
+                # That means we have already printed out a part of the User's name. We need to take it back. So printing the carriage return
+                print('\r', end='')
+            else:
+                print('')
+
+            pred_answer_index = pred_index
+
+    print(f"{USER_NAME}: ", end='')

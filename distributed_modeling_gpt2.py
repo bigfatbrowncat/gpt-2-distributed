@@ -29,7 +29,7 @@ if transformers_version not in supported_transformers_versions:
 import math
 import os
 from dataclasses import dataclass
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple, Union, List
 
 import torch
 import torch.utils.checkpoint
@@ -173,6 +173,15 @@ class GPT2Attention(nn.Module):
         self.resid_dropout = nn.Dropout(config.resid_pdrop)
 
         self.pruned_heads = set()
+
+    def disable_grads(self):
+        if self.c_attn is Conv1D:
+            self.c_attn.weight.requires_grad = False
+            self.c_attn.bias.requires_grad = False
+        if self.q_attn is Conv1D:
+            self.q_attn.weight.requires_grad = False
+            self.q_attn.bias.requires_grad = False
+
 
     def prune_heads(self, heads):
         if len(heads) == 0:
@@ -383,6 +392,16 @@ class GPT2Block(nn.Module):
             self.ln_cross_attn = nn.LayerNorm(hidden_size, eps=config.layer_norm_epsilon)
 
         self.mlp = GPT2MLP(inner_dim, config)
+
+    def disable_grads(self):
+        if self.ln_1 is nn.LayerNorm:
+            self.ln_1.weight.requires_grad = False
+            self.ln_1.bias.requires_grad = False
+        if self.attn is GPT2Attention:
+            self.attn.disable_grads()
+        if self.ln_2 is nn.LayerNorm:
+            self.ln_2.weight.requires_grad = False
+            self.ln_2.bias.requires_grad = False
 
     def forward(
         self,
@@ -717,6 +736,11 @@ class GPT2Model(GPT2PreTrainedModel):
                 self.h[block] = self.h[block].to(cuda_device)
         # ln_f to last
         self.ln_f = self.ln_f.to(self.last_device)
+
+    def disable_grads_for_layers(self, layers_to_disable: List[int]):
+        for l in layers_to_disable:
+            if self.h[l] is GPT2Block:
+                self.h[l].disable_grads()
 
     @add_start_docstrings(DEPARALLELIZE_DOCSTRING)
     def deparallelize(self):

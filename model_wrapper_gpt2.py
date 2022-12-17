@@ -29,39 +29,45 @@ class GPT2ModelWrapper:
     def encode(self, text):
         return self.tokenizer.encode(text, return_tensors='pt').to(self.__input_device())
 
-    def decode(self, data):
-        return self.tokenizer.decode(data, skip_special_tokens=True)
+    def decode(self, data, skip_special_tokens=False):
+        return self.tokenizer.decode(data, skip_special_tokens=skip_special_tokens)
 
-    def generate(self, text, seed = None, max_length=100):
+    def generate(self, input_tokens, seed = None, max_length=200):
         self.model.eval()
-
-        input = self.encode(text)
 
         if seed is not None:
             torch.manual_seed(seed)
 
-        sample_output = self.model.generate(
-            input,
+        output_tokens = self.model.generate(
+            input_tokens,
             do_sample=True,
             max_length=max_length,
             top_p=0.78,
-            top_k=0)
+            top_k=0,
+            temperature=0.7
+        )
 
-        return self.decode(sample_output[0])
+        return output_tokens[0]
 
     def train(self,
               dataset,
               output_prefix="snapshot",
+              validator=None,
               learning_rate=3e-5,
               warmup_steps=5000,
               training_steps=100,
               epochs=10,
-              learning_bunch_size=16,
+              iterations_in_bunch_count=16,
               max_sequence_length=400):
 
         self.model.train()
 
         data_item_loader = DataLoader(dataset, batch_size=1, shuffle=True)
+
+        #        self.model.base_model.disable_grads_for_layers(layers_to_disable=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32])
+        for param in self.model.parameters():
+            if param.is_cpu:
+                param.requires_grad = False
 
         optimizer = AdamW(self.model.parameters(), lr=learning_rate)
         scheduler = get_linear_schedule_with_warmup(optimizer,
@@ -74,7 +80,6 @@ class GPT2ModelWrapper:
         tmp_jokes_tens = None
 
         for epoch in range(epochs):
-
             print(f"EPOCH {epoch} started " + '=' * 30)
 
             start_time = time.time()
@@ -111,9 +116,10 @@ class GPT2ModelWrapper:
                 sum_loss = sum_loss + loss.detach().data
 
                 iteration_in_bunch += 1
-                if iteration_in_bunch == learning_bunch_size:
+                if iteration_in_bunch == iterations_in_bunch_count:
                     time_per_lesson = (time.time() - start_time) / (lesson + 1)
-                    print(f"Bunch {bunch_count} passed ({lesson} lessons of {lessons_count}, {time_per_lesson:.2} per lesson)")
+                    print(f"Bunch {bunch_count} passed ({lesson} lessons "
+                          f"of {lessons_count}, {time_per_lesson:.2} per lesson)")
                     iteration_in_bunch = 0
                     bunch_count += 1
                     optimizer.step()
@@ -122,7 +128,8 @@ class GPT2ModelWrapper:
                     self.model.zero_grad()
 
                 if bunch_count == 100:
-                    print(f"100 bunches passed. Average loss per bunch is {sum_loss / bunch_count}")
+                    print(f"{bunch_count} bunches passed. Average loss "
+                          f"per iteration is {sum_loss / bunch_count / iterations_in_bunch_count}")
                     bunch_count = 0
                     sum_loss = 0.0
 
@@ -131,3 +138,9 @@ class GPT2ModelWrapper:
             if not os.path.exists(models_folder):
                 os.mkdir(models_folder)
             torch.save(self.model.state_dict(), os.path.join(models_folder, f"{output_prefix}_{epoch}.pt"))
+
+            if validator is not None:
+                #self.model.eval()  -- called in generate
+                validator(self)
+                self.model.train()
+
