@@ -181,6 +181,9 @@ class GPT2Attention(nn.Module):
         if self.q_attn is Conv1D:
             self.q_attn.weight.requires_grad = False
             self.q_attn.bias.requires_grad = False
+        if self.c_proj is Conv1D:
+            self.c_proj.weight.requires_grad = False
+            self.c_proj.bias.requires_grad = False
 
 
     def prune_heads(self, heads):
@@ -726,6 +729,7 @@ class GPT2Model(GPT2PreTrainedModel):
         assert_device_map(self.device_map, len(self.h))
         self.model_parallel = True
         self.first_device = list(self.device_map.keys())[0] #"cpu" if "cpu" in self.device_map.keys() else "cuda:" + str(min(self.device_map.keys()))
+        # self.first_type = list()
         self.last_device = list(self.device_map.keys())[-1] #"cuda:" + list(self.device_map.keys())[-1] #str(max(self.device_map.keys()))
         self.wte = self.wte.to(self.first_device)
         self.wpe = self.wpe.to(self.first_device)
@@ -736,6 +740,26 @@ class GPT2Model(GPT2PreTrainedModel):
                 self.h[block] = self.h[block].to(cuda_device)
         # ln_f to last
         self.ln_f = self.ln_f.to(self.last_device)
+
+    # @staticmethod
+    # def cast_type(object: torch.nn.Module, type: torch.dtype):
+    #     if type == torch.float32:
+    #         object.float()
+    #     elif type == torch.float16:
+    #         object.half()
+    #
+    # def cast_types(self, types_list: List[torch.dtype]=None):
+    #     self.types_list = types_list
+    #     self.first_type = types_list[0]
+    #     self.last_type = types_list[-1]
+    #     self.cast_type(self.wte, self.first_type)
+    #     self.cast_type(self.wpe, self.first_type)
+    #
+    #     for index, tp in enumerate(self.types_list):
+    #         self.cast_type(self.h[index], tp)
+    #
+    #     self.cast_type(self.ln_f, self.last_type)
+
 
     def disable_grads_for_layers(self, layers_to_disable: List[int]):
         for l in layers_to_disable:
@@ -1030,6 +1054,11 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
         self.transformer.parallelize(self.device_map)
         self.lm_head = self.lm_head.to(self.transformer.first_device)
         self.model_parallel = True
+
+    # def cast_types(self, types_list: List[torch.dtype] = None):
+    #     self.types_list = types_list
+    #     self.transformer.cast_types(types_list=types_list)
+    #     self.transformer.cast_type(self.lm_head, self.transformer.first_type)
 
     @add_start_docstrings(DEPARALLELIZE_DOCSTRING)
     def deparallelize(self):

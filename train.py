@@ -2,7 +2,9 @@ import argparse
 import csv
 import os
 
+import torch
 from torch.utils.data import Dataset, DataLoader
+from torch.cuda.amp import autocast as cuda_autocast
 
 from model_wrapper_gpt2 import GPT2ModelWrapper
 
@@ -47,46 +49,50 @@ class WordsDataset(Dataset):
         return self.joke_list[item]
 
 
+def enc_gen_dec(text):
+    return model_wrapper.decode(model_wrapper.generate(model_wrapper.encode(text), max_length=50))
+
 def validate(model_wrapper):
     BOT_NAME = "AI"
     USER_NAME = "User"
 
     print("=========== WORDS ==============")
 
-    print(model_wrapper.generate('word "come" starts with'))
-    print(model_wrapper.generate('word "come" ends with'))
-    print(model_wrapper.generate('The first letter in "with" is'))
-    print(model_wrapper.generate('The last letter in "with" is'))
-    print(model_wrapper.generate('The first letter in "welcome" is'))
-    print(model_wrapper.generate('The last letter in "welcome" is'))
-    print(model_wrapper.generate('The first letter in "crocodile" is'))
-    print(model_wrapper.generate('The last letter in "crocodile" is'))
-    print(model_wrapper.generate(f'{USER_NAME}: Write a word that ends with "a".'))
-    print(model_wrapper.generate(f'{USER_NAME}: Write a word with the letter "s" in its end.'))
-    print(model_wrapper.generate(f'{USER_NAME}: Write a word that starts with "e".'))
-    print(model_wrapper.generate(f'{USER_NAME}: Write a word that starts with the last letter of "crocodile".'))
+    print(enc_gen_dec('word "come" starts with'))
+    print(enc_gen_dec('word "come" ends with'))
+    print(enc_gen_dec('The first letter in "with" is'))
+    print(enc_gen_dec('The last letter in "with" is'))
+    print(enc_gen_dec('The first letter in "welcome" is'))
+    print(enc_gen_dec('The last letter in "welcome" is'))
+    print(enc_gen_dec('The first letter in "crocodile" is'))
+    print(enc_gen_dec('The last letter in "crocodile" is'))
+    print(enc_gen_dec(f'{USER_NAME}: Write a word that ends with "a".'))
+    print(enc_gen_dec(f'{USER_NAME}: Write a word with the letter "s" in its end.'))
+    print(enc_gen_dec(f'{USER_NAME}: Write a word that starts with "e".'))
+    print(enc_gen_dec(f'{USER_NAME}: Write a word that starts with the last letter of "crocodile".'))
 
     print("=========== MATH ==============")
 
-    print(model_wrapper.generate("Multiply two by two. The result is"))
-    print(model_wrapper.generate("Multiply three by two. The result is"))
-    print(model_wrapper.generate("Add five to six. The result is"))
-    print(model_wrapper.generate("Add two to 2. It is"))
-    print(model_wrapper.generate("Add 3 to three. The result is"))
-    print(model_wrapper.generate("3 multiplied by six equals"))
-    print(model_wrapper.generate("five multiplied by 2 equals"))
-    print(model_wrapper.generate("2 + 4 ="))
-    print(model_wrapper.generate("I am a very smart guy, I know that 3 * 7 ="))
-    print(model_wrapper.generate(f"{USER_NAME}: Is it true that 2 + 3 = 6?\n{BOT_NAME}:"))
-    print(model_wrapper.generate(f"{USER_NAME}: Is it true that seven multiplied by seven is 49?\n{BOT_NAME}:"))
-    print(model_wrapper.generate(f"{USER_NAME}: How much is seven multiplied by seven?\n{BOT_NAME}:"))
-    print(model_wrapper.generate("How much is 7 * 6?"))
-    print(model_wrapper.generate("How much is twenty multiplied by nineteen?"))
-    print(model_wrapper.generate("How much is one plus two plus three?"))
+    print(enc_gen_dec("Multiply two by two. The result is"))
+    print(enc_gen_dec("Multiply three by two. The result is"))
+    print(enc_gen_dec("Add five to six. The result is"))
+    print(enc_gen_dec("Add two to 2. It is"))
+    print(enc_gen_dec("Add 3 to three. The result is"))
+    print(enc_gen_dec("3 multiplied by six equals"))
+    print(enc_gen_dec("five multiplied by 2 equals"))
+    print(enc_gen_dec("2 + 4 ="))
+    print(enc_gen_dec("I am a very smart guy, I know that 3 * 7 ="))
+    print(enc_gen_dec(f"{USER_NAME}: Is it true that 2 + 3 = 6?\n{BOT_NAME}:"))
+    print(enc_gen_dec(f"{USER_NAME}: Is it true that seven multiplied by seven is 49?\n{BOT_NAME}:"))
+    print(enc_gen_dec(f"{USER_NAME}: How much is seven multiplied by seven?\n{BOT_NAME}:"))
+    print(enc_gen_dec("How much is 7 * 6?"))
+    print(enc_gen_dec("How much is twenty multiplied by nineteen?"))
+    print(enc_gen_dec("How much is one plus two plus three?"))
 
 
 dataset = WordsDataset()
 # data_item_loader = DataLoader(dataset, batch_size=1, shuffle=True)
 
-model_wrapper.train(dataset, "gpt2-xl-auto", validator=validate, iterations_in_bunch_count=8, epochs=20)
+with cuda_autocast(enabled=True, dtype=torch.float16):
+    model_wrapper.train(dataset, "gpt2-large-auto", validator=validate, iterations_in_bunch_count=4, epochs=20)
 

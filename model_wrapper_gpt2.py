@@ -20,7 +20,9 @@ class GPT2ModelWrapper:
             topology = config['topology']
 
         self.tokenizer = GPT2Tokenizer.from_pretrained(topology, cache_dir="cache")
-        self.model = GPT2LMHeadModel.from_pretrained(topology, pad_token_id=self.tokenizer.eos_token_id, cache_dir="cache")
+        self.model = GPT2LMHeadModel.from_pretrained(topology, pad_token_id=self.tokenizer.eos_token_id,
+                                                     cache_dir="cache")
+
         self.model.parallelize(device_map=device_map)
 
         if weights_filename is not None:
@@ -32,7 +34,7 @@ class GPT2ModelWrapper:
     def decode(self, data, skip_special_tokens=False):
         return self.tokenizer.decode(data, skip_special_tokens=skip_special_tokens)
 
-    def generate(self, input_tokens, seed = None, max_length=200):
+    def generate(self, input_tokens, seed = None, max_length=100):
         self.model.eval()
 
         if seed is not None:
@@ -64,22 +66,42 @@ class GPT2ModelWrapper:
 
         data_item_loader = DataLoader(dataset, batch_size=1, shuffle=True)
 
-        #        self.model.base_model.disable_grads_for_layers(layers_to_disable=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32])
-        for param in self.model.parameters():
+        #self.model.base_model.disable_grads_for_layers(layers_to_disable=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32])
+        for name, param in self.model.named_parameters():
             if param.is_cpu:
+                print(f"Disabled training for {name}")
                 param.requires_grad = False
 
         optimizer = AdamW(self.model.parameters(), lr=learning_rate)
         scheduler = get_linear_schedule_with_warmup(optimizer,
-                                                         num_warmup_steps=warmup_steps,
-                                                        num_training_steps=training_steps)
+                                                    num_warmup_steps=warmup_steps,
+                                                    num_training_steps=training_steps)
         iteration_in_bunch = 0
         sum_loss = 0.0
         bunch_count = 0
 
         tmp_jokes_tens = None
 
+        # types_list = [torch.float16] * 36
+        # types_list[0] = torch.float32
+        # types_list[-1] = torch.float32
+
+        #self.model.cast_types(types_list)
+
         for epoch in range(epochs):
+            if validator is not None:
+                #self.model.eval()  -- called in generate
+                validator(self)
+                self.model.train()
+
+
+            #self.model.transformer.half()
+            # self.model.transformer.wte.half()
+            # self.model.transformer.wpe.half()
+            # for index, layer in enumerate(self.model.transformer.h):
+            #     # if index >= 15:     # TODO Get from the map
+            #     layer.half()
+
             print(f"EPOCH {epoch} started " + '=' * 30)
 
             start_time = time.time()
@@ -119,7 +141,7 @@ class GPT2ModelWrapper:
                 if iteration_in_bunch == iterations_in_bunch_count:
                     time_per_lesson = (time.time() - start_time) / (lesson + 1)
                     print(f"Bunch {bunch_count} passed ({lesson} lessons "
-                          f"of {lessons_count}, {time_per_lesson:.2} per lesson)")
+                          f"of {lessons_count}, {time_per_lesson * 1000:.1f}ms per lesson)")
                     iteration_in_bunch = 0
                     bunch_count += 1
                     optimizer.step()
@@ -137,10 +159,11 @@ class GPT2ModelWrapper:
             models_folder = "trained_models"
             if not os.path.exists(models_folder):
                 os.mkdir(models_folder)
+
+            # types_list = [
+            #                  torch.float32] * 36  # [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35 ]
+            # self.model.cast_types(types_list)
+
             torch.save(self.model.state_dict(), os.path.join(models_folder, f"{output_prefix}_{epoch}.pt"))
 
-            if validator is not None:
-                #self.model.eval()  -- called in generate
-                validator(self)
-                self.model.train()
 
