@@ -722,6 +722,12 @@ class GPT2Model(GPT2PreTrainedModel):
 
     @add_start_docstrings(PARALLELIZE_DOCSTRING)
     def parallelize(self, device_map=None):
+        def dev_type(dev: str) -> torch.dtype:
+            if dev.startswith("cuda"):
+                return torch.float16
+            else:
+                return torch.float32
+
         # Check validity of device_map
         self.device_map = (
             get_device_map(len(self.h), range(torch.cuda.device_count())) if device_map is None else device_map
@@ -737,8 +743,11 @@ class GPT2Model(GPT2PreTrainedModel):
         for k, v in self.device_map.items():
             for block in v:
                 cuda_device = "cuda:" + str(k) if k[0].isdigit() else k  #"cuda:" + str(k)
+#                if block != v[-1]:
                 self.h[block] = self.h[block].to(cuda_device)
         # ln_f to last
+        #self.h[-1] = self.h[-1].to(self.last_device, dtype=torch.float32)
+
         self.ln_f = self.ln_f.to(self.last_device)
 
     # @staticmethod
